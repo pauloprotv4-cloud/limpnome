@@ -84,7 +84,7 @@ function lerProxy(): ProxyInfo | null {
 // Consulta a API através de um proxy SOCKS5 usando http nativo + SocksProxyAgent
 function consultarViaSocks(cpf: string, proxy: ProxyInfo): Promise<{ status: number; corpo: string }> {
   return new Promise((resolve, reject) => {
-    const agent = new SocksProxyAgent(proxy.url)
+    const agent = new SocksProxyAgent(proxy.url, { timeout: 20000 })
     const req = http.request(
       {
         host: API_HOST,
@@ -238,7 +238,8 @@ async function consultarApi(cpf: string): Promise<{ status: number; corpo: strin
   if (proxy) {
     // monta as duas variantes do mesmo endpoint (SOCKS5 e HTTP CONNECT)
     const credencial = proxy.auth ? `${proxy.auth.split(':').map(encodeURIComponent).join(':')}@` : ''
-    const socksProxy: ProxyInfo = { ...proxy, socks: true, url: `socks5://${credencial}${proxy.host}:${proxy.port}` }
+    // socks5h força a resolução de DNS no lado do proxy (evita "socket hang up")
+    const socksProxy: ProxyInfo = { ...proxy, socks: true, url: `socks5h://${credencial}${proxy.host}:${proxy.port}` }
     const httpProxy: ProxyInfo = { ...proxy, socks: false }
 
     // tenta primeiro o protocolo declarado; se falhar, tenta o outro
