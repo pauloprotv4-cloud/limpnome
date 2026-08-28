@@ -37,9 +37,10 @@ export async function GET(request: NextRequest) {
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 30000)
+  const url = `${API_BASE}?CPF=${cpf}`
 
   try {
-    const resposta = await fetch(`${API_BASE}?CPF=${cpf}`, {
+    const resposta = await fetch(url, {
       signal: controller.signal,
       cache: 'no-store',
       headers: {
@@ -59,10 +60,31 @@ export async function GET(request: NextRequest) {
 
     const nome = extrairNome(dados) || (typeof dados === 'string' && dados.trim() ? dados.trim() : null)
 
-    return NextResponse.json({ ok: true, nome, dados })
+    // debug: expõe status e amostra da resposta para diagnóstico em produção
+    return NextResponse.json({
+      ok: true,
+      nome,
+      dados,
+      debug: {
+        status: resposta.status,
+        statusText: resposta.statusText,
+        amostra: texto.slice(0, 500),
+      },
+    })
   } catch (erro) {
-    const mensagem = erro instanceof Error && erro.name === 'AbortError' ? 'Tempo de consulta excedido' : 'Falha na consulta'
-    return NextResponse.json({ ok: false, erro: mensagem }, { status: 502 })
+    const nome = erro instanceof Error ? erro.name : 'Erro'
+    const mensagem = erro instanceof Error ? erro.message : String(erro)
+    const causa =
+      erro instanceof Error && 'cause' in erro && erro.cause ? String((erro.cause as { message?: string })?.message ?? erro.cause) : null
+
+    return NextResponse.json(
+      {
+        ok: false,
+        erro: nome === 'AbortError' ? 'Tempo de consulta excedido (30s)' : `${nome}: ${mensagem}`,
+        debug: { nome, mensagem, causa, url },
+      },
+      { status: 502 },
+    )
   } finally {
     clearTimeout(timeout)
   }

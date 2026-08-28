@@ -35,8 +35,11 @@ export default function RenegociarClient() {
       const resposta = await fetch(`/api/consulta-cpf?cpf=${digitos}`, { cache: 'no-store' })
       const dados = await resposta.json()
 
+      console.log('[v0] resposta consulta-cpf:', dados)
+
       if (!resposta.ok || !dados.ok) {
-        throw new Error(dados?.erro || 'Não foi possível consultar o CPF.')
+        const detalhe = dados?.debug ? ` (${JSON.stringify(dados.debug)})` : ''
+        throw new Error((dados?.erro || 'Não foi possível consultar o CPF.') + detalhe)
       }
 
       setResultado({ nome: dados.nome })
