@@ -1,5 +1,7 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
+
 // Dados genéricos exibidos ao lead (não temos API de CPF).
 const CPF_CLIENTE = '000.000.000-00'
 const SCORE = 365
@@ -10,6 +12,8 @@ const COMPRIMENTO_ARCO = 147.6548547187203
 const OFFSET = COMPRIMENTO_ARCO - (SCORE / SCORE_MAXIMO) * COMPRIMENTO_ARCO
 
 export default function AnaliseClient() {
+  const router = useRouter()
+
   return (
     <section aria-label="Resultado da análise" className="w-full max-w-[640px] space-y-3 sm:space-y-4">
       <div className="w-fit max-w-full rounded-full border border-gray-100 bg-white px-4 py-2.5 shadow-sm sm:px-6 sm:py-3.5">
@@ -88,6 +92,7 @@ export default function AnaliseClient() {
 
       <button
         type="button"
+        onClick={() => router.push('/acordo')}
         className="block w-full rounded-full bg-[#1e40af] px-5 py-3 text-center text-sm font-bold text-white transition-colors hover:bg-[#1a3696] sm:px-6 sm:py-3.5 sm:text-base"
       >
         BUSCAR ACORDO
