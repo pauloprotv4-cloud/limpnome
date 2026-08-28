@@ -14,12 +14,16 @@ function formatTime(segundos: number) {
   return `${min}:${seg.toString().padStart(2, '0')}`
 }
 
+const CODIGO_ACORDO = 'X1EX4-1XO--'
+
 export default function AcordoClient() {
   const [encontrado, setEncontrado] = useState(false)
   const [mostrarPlayer, setMostrarPlayer] = useState(false)
   const [tocando, setTocando] = useState(false)
   const [tempoAtual, setTempoAtual] = useState(0)
   const [duracao, setDuracao] = useState(0)
+  const [audioTerminou, setAudioTerminou] = useState(false)
+  const [mensagensVisiveis, setMensagensVisiveis] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   // Simula a verificação de acordos antes de revelar o resultado.
@@ -27,6 +31,15 @@ export default function AcordoClient() {
     const t = window.setTimeout(() => setEncontrado(true), 3000)
     return () => window.clearTimeout(t)
   }, [])
+
+  // Revela a sequência de mensagens de forma escalonada.
+  const iniciarMensagens = () => {
+    if (mensagensVisiveis > 0) return
+    const totalMensagens = 6
+    for (let i = 1; i <= totalMensagens; i++) {
+      window.setTimeout(() => setMensagensVisiveis(i), i * 1200)
+    }
+  }
 
   const alternarPlay = () => {
     const audio = audioRef.current
@@ -83,7 +96,10 @@ export default function AcordoClient() {
                 onPause={() => setTocando(false)}
                 onLoadedMetadata={(e) => setDuracao(e.currentTarget.duration)}
                 onTimeUpdate={(e) => setTempoAtual(e.currentTarget.currentTime)}
-                onEnded={() => setTocando(false)}
+                onEnded={() => {
+                  setTocando(false)
+                  setAudioTerminou(true)
+                }}
               />
 
               <div className="flex items-center gap-4">
@@ -114,8 +130,84 @@ export default function AcordoClient() {
                 </div>
               </div>
 
-              <p className="mt-4 text-center text-sm text-gray-400">Ouça o áudio completo para continuar</p>
+              {audioTerminou ? (
+                <button
+                  type="button"
+                  onClick={iniciarMensagens}
+                  disabled={mensagensVisiveis > 0}
+                  className="mt-5 w-full rounded-full bg-[#1e40af] py-3.5 text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] disabled:opacity-60 sm:py-4 sm:text-base"
+                >
+                  Sim, quero realizar o acordo
+                </button>
+              ) : (
+                <p className="mt-4 text-center text-sm text-gray-400">Ouça o áudio completo para continuar</p>
+              )}
             </section>
+          )}
+
+          {mensagensVisiveis >= 1 && (
+            <div className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm sm:px-6 sm:py-4">
+              <p className="text-sm leading-relaxed text-gray-700 sm:text-base">
+                Parabéns <span className="font-bold text-gray-900">{NOME_CLIENTE}</span>!
+              </p>
+            </div>
+          )}
+
+          {mensagensVisiveis >= 2 && (
+            <div className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm sm:px-6 sm:py-4">
+              <p className="text-sm leading-relaxed text-gray-700 sm:text-base">
+                Pode comemorar! Encontramos um{' '}
+                <span className="font-bold text-gray-900">SUPER ACORDO DE 99% DE DESCONTO</span> para você!
+              </p>
+            </div>
+          )}
+
+          {mensagensVisiveis >= 3 && (
+            <div className="w-fit max-w-full rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm sm:px-6 sm:py-4">
+              <p className="text-sm italic leading-relaxed text-gray-700 sm:text-base">
+                Acessando o acordo {CODIGO_ACORDO}...
+              </p>
+            </div>
+          )}
+
+          {mensagensVisiveis >= 4 && (
+            <div className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm sm:px-6 sm:py-4">
+              <p className="text-sm leading-relaxed text-gray-700 sm:text-base">
+                Informações do acordo <span className="font-bold italic text-gray-900">{CODIGO_ACORDO}</span> para ({' '}
+                <span className="font-bold text-gray-900">{NOME_CLIENTE}</span>)
+              </p>
+              <p className="text-sm leading-relaxed text-gray-700 sm:text-base">(CPF: {CPF_CLIENTE})</p>
+            </div>
+          )}
+
+          {mensagensVisiveis >= 5 && (
+            <div className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm sm:px-6 sm:py-4">
+              <p className="text-sm leading-relaxed text-gray-700 sm:text-base">
+                O contrato atual é válido apenas para o titular:{' '}
+                <span className="font-bold text-gray-900">{NOME_CLIENTE}</span> portador(a) do CPF:{' '}
+                <span className="font-bold text-gray-900">{CPF_CLIENTE}</span>
+              </p>
+            </div>
+          )}
+
+          {mensagensVisiveis >= 6 && (
+            <>
+              <div className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm sm:px-6 sm:py-4">
+                <p className="text-sm leading-relaxed text-gray-700 sm:text-base">
+                  Você gostaria de realizar o seu acordo com{' '}
+                  <span className="font-bold text-gray-900">99% DE DESCONTO</span> para quitar{' '}
+                  <span className="font-bold text-gray-900">todas</span> as suas dívidas e ter seu nome limpo novamente
+                  por apenas <span className="font-bold text-gray-900">R$ 68,92</span>?
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="block w-full rounded-full bg-[#1e40af] px-5 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:py-4 sm:text-base"
+              >
+                Confirmar o acordo e limpar o nome
+              </button>
+            </>
           )}
         </>
       )}
