@@ -13,6 +13,7 @@ function formatarCpf(valor: string) {
 
 type Resultado = {
   nome: string | null
+  debug?: unknown
 }
 
 export default function RenegociarClient() {
@@ -42,7 +43,7 @@ export default function RenegociarClient() {
         throw new Error((dados?.erro || 'Não foi possível consultar o CPF.') + detalhe)
       }
 
-      setResultado({ nome: dados.nome })
+      setResultado({ nome: dados.nome, debug: dados.debug })
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível consultar o CPF. Tente novamente.')
     } finally {
@@ -88,6 +89,12 @@ export default function RenegociarClient() {
             Seu navegador não suporta a reprodução de vídeo.
           </video>
         </section>
+
+        {resultado.debug ? (
+          <pre className="overflow-x-auto rounded-lg bg-gray-100 p-3 text-[10px] leading-tight text-gray-700">
+            {JSON.stringify(resultado.debug, null, 2)}
+          </pre>
+        ) : null}
       </article>
     )
   }
