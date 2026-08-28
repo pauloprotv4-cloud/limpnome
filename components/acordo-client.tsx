@@ -32,7 +32,19 @@ export default function AcordoClient() {
   const [tocandoFinal, setTocandoFinal] = useState(false)
   const [tempoAtualFinal, setTempoAtualFinal] = useState(0)
   const [duracaoFinal, setDuracaoFinal] = useState(0)
+  const [instrucoesTerminou, setInstrucoesTerminou] = useState(false)
   const audioFinalRef = useRef<HTMLAudioElement>(null)
+
+  // Etapas finais após as instruções.
+  const [acordoConfirmado, setAcordoConfirmado] = useState(false)
+  const [mostrarBotaoMensagemFinal, setMostrarBotaoMensagemFinal] = useState(false)
+  const [mostrarPlayerPagamento, setMostrarPlayerPagamento] = useState(false)
+
+  // Player da mensagem final (terceiro áudio - pagamento).
+  const [tocandoPagamento, setTocandoPagamento] = useState(false)
+  const [tempoAtualPagamento, setTempoAtualPagamento] = useState(0)
+  const [duracaoPagamento, setDuracaoPagamento] = useState(0)
+  const audioPagamentoRef = useRef<HTMLAudioElement>(null)
 
   // Simula a verificação de acordos antes de revelar o resultado.
   useEffect(() => {
@@ -69,8 +81,19 @@ export default function AcordoClient() {
     }
   }
 
+  const alternarPlayPagamento = () => {
+    const audio = audioPagamentoRef.current
+    if (!audio) return
+    if (audio.paused) {
+      audio.play().catch(() => {})
+    } else {
+      audio.pause()
+    }
+  }
+
   const progresso = duracao > 0 ? (tempoAtual / duracao) * 100 : 0
   const progressoFinal = duracaoFinal > 0 ? (tempoAtualFinal / duracaoFinal) * 100 : 0
+  const progressoPagamento = duracaoPagamento > 0 ? (tempoAtualPagamento / duracaoPagamento) * 100 : 0
 
   return (
     <section aria-label="Verificação de acordo" className="w-full max-w-[640px] space-y-4">
@@ -261,7 +284,10 @@ export default function AcordoClient() {
                     onPause={() => setTocandoFinal(false)}
                     onLoadedMetadata={(e) => setDuracaoFinal(e.currentTarget.duration)}
                     onTimeUpdate={(e) => setTempoAtualFinal(e.currentTarget.currentTime)}
-                    onEnded={() => setTocandoFinal(false)}
+                    onEnded={() => {
+                      setTocandoFinal(false)
+                      setInstrucoesTerminou(true)
+                    }}
                   />
 
                   <div className="flex items-center gap-4">
@@ -288,6 +314,93 @@ export default function AcordoClient() {
                       <div className="mt-2 flex items-center justify-between text-xs text-gray-500 sm:text-sm">
                         <span>{formatTime(tempoAtualFinal)}</span>
                         <span>{formatTime(duracaoFinal)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {instrucoesTerminou ? (
+                    <button
+                      type="button"
+                      onClick={() => setAcordoConfirmado(true)}
+                      disabled={acordoConfirmado}
+                      className="mt-5 w-full rounded-full bg-[#1e40af] py-3.5 text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] disabled:opacity-60 sm:py-4 sm:text-base"
+                    >
+                      Continuar
+                    </button>
+                  ) : (
+                    <p className="mt-4 text-center text-sm text-gray-400">Ouça o áudio completo para continuar</p>
+                  )}
+                </section>
+              )}
+
+              {acordoConfirmado && (
+                <div className="flex flex-col gap-4">
+                  <div className="w-fit max-w-full rounded-full border border-gray-100 bg-white px-4 py-2.5 shadow-sm sm:px-6 sm:py-3.5">
+                    <p className="text-sm font-bold text-gray-900 sm:text-base">Acordo confirmado com sucesso!</p>
+                  </div>
+
+                  {!mostrarBotaoMensagemFinal && (
+                    <button
+                      type="button"
+                      onClick={() => setMostrarBotaoMensagemFinal(true)}
+                      className="self-end rounded-full bg-[#1e40af] px-8 py-3 text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:text-base"
+                    >
+                      Continuar
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {mostrarBotaoMensagemFinal && !mostrarPlayerPagamento && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarPlayerPagamento(true)}
+                  className="block w-full rounded-full bg-[#1e40af] px-5 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:py-4 sm:text-base"
+                >
+                  Ouvir mensagem final
+                </button>
+              )}
+
+              {mostrarPlayerPagamento && (
+                <section
+                  aria-label="Áudio da mensagem final"
+                  className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-6"
+                >
+                  <audio
+                    ref={audioPagamentoRef}
+                    src="/assets/pagamento.mp3"
+                    preload="auto"
+                    onPlay={() => setTocandoPagamento(true)}
+                    onPause={() => setTocandoPagamento(false)}
+                    onLoadedMetadata={(e) => setDuracaoPagamento(e.currentTarget.duration)}
+                    onTimeUpdate={(e) => setTempoAtualPagamento(e.currentTarget.currentTime)}
+                    onEnded={() => setTocandoPagamento(false)}
+                  />
+
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={alternarPlayPagamento}
+                      aria-label={tocandoPagamento ? 'Pausar áudio' : 'Reproduzir áudio'}
+                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#1e40af] text-white transition-colors hover:bg-[#1a3696]"
+                    >
+                      {tocandoPagamento ? (
+                        <Pause className="h-6 w-6" fill="currentColor" />
+                      ) : (
+                        <Play className="ml-0.5 h-6 w-6" fill="currentColor" />
+                      )}
+                    </button>
+
+                    <div className="flex-1">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div
+                          className="h-full rounded-full bg-[#1e40af] transition-[width]"
+                          style={{ width: `${progressoPagamento}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-xs text-gray-500 sm:text-sm">
+                        <span>{formatTime(tempoAtualPagamento)}</span>
+                        <span>{formatTime(duracaoPagamento)}</span>
                       </div>
                     </div>
                   </div>
