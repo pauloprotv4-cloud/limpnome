@@ -31,10 +31,11 @@ function extrairNome(dados: unknown): string | null {
   return null
 }
 
-// Faz a requisição usando o módulo http nativo do Node.
+// Faz uma requisição usando o módulo http nativo do Node.
 // O fetch do Node (undici) falha com "other side closed" neste servidor legado,
-// por isso usamos http.request com Connection: close.
-function consultarApi(cpf: string): Promise<{ status: number; corpo: string }> {
+// por isso usamos http.request. Alguns servidores antigos fecham a conexão
+// dependendo dos cabeçalhos, então testamos perfis diferentes.
+function requisicaoUnica(cpf: string, headers: http.OutgoingHttpHeaders): Promise<{ status: number; corpo: string }> {
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -42,13 +43,9 @@ function consultarApi(cpf: string): Promise<{ status: number; corpo: string }> {
         port: API_PORT,
         path: `${API_PATH}?CPF=${cpf}`,
         method: 'GET',
-        timeout: 30000,
-        headers: {
-          Accept: 'application/json, text/plain, */*',
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-          Connection: 'close',
-        },
+        timeout: 25000,
+        agent: new http.Agent({ keepAlive: false }),
+        headers,
       },
       (res) => {
         let corpo = ''
@@ -63,11 +60,41 @@ function consultarApi(cpf: string): Promise<{ status: number; corpo: string }> {
     )
 
     req.on('timeout', () => {
-      req.destroy(new Error('Tempo de consulta excedido (30s)'))
+      req.destroy(new Error('Tempo de consulta excedido (25s)'))
     })
     req.on('error', (err) => reject(err))
     req.end()
   })
+}
+
+const PERFIS: http.OutgoingHttpHeaders[] = [
+  // Perfil 1: cabeçalhos mínimos
+  { Host: API_HOST, Accept: '*/*', Connection: 'close' },
+  // Perfil 2: com User-Agent de navegador
+  {
+    Host: API_HOST,
+    Accept: 'application/json, text/plain, */*',
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+    Connection: 'close',
+  },
+  // Perfil 3: User-Agent simples de cliente HTTP
+  { Host: API_HOST, Accept: '*/*', 'User-Agent': 'curl/8.4.0', Connection: 'close' },
+]
+
+async function consultarApi(cpf: string): Promise<{ status: number; corpo: string }> {
+  const erros: string[] = []
+  // tenta cada perfil, com uma repetição extra por perfil
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    for (const headers of PERFIS) {
+      try {
+        return await requisicaoUnica(cpf, headers)
+      } catch (err) {
+        erros.push(err instanceof Error ? `${err.name}: ${err.message}` : String(err))
+      }
+    }
+  }
+  throw new Error(`Todas as tentativas falharam → ${erros.join(' | ')}`)
 }
 
 export async function GET(request: NextRequest) {
