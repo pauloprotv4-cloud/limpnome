@@ -27,6 +27,13 @@ export default function AcordoClient() {
   const [confirmou, setConfirmou] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
 
+  // Player das instruções finais (segundo áudio).
+  const [mostrarPlayerFinal, setMostrarPlayerFinal] = useState(false)
+  const [tocandoFinal, setTocandoFinal] = useState(false)
+  const [tempoAtualFinal, setTempoAtualFinal] = useState(0)
+  const [duracaoFinal, setDuracaoFinal] = useState(0)
+  const audioFinalRef = useRef<HTMLAudioElement>(null)
+
   // Simula a verificação de acordos antes de revelar o resultado.
   useEffect(() => {
     const t = window.setTimeout(() => setEncontrado(true), 3000)
@@ -52,7 +59,18 @@ export default function AcordoClient() {
     }
   }
 
+  const alternarPlayFinal = () => {
+    const audio = audioFinalRef.current
+    if (!audio) return
+    if (audio.paused) {
+      audio.play().catch(() => {})
+    } else {
+      audio.pause()
+    }
+  }
+
   const progresso = duracao > 0 ? (tempoAtual / duracao) * 100 : 0
+  const progressoFinal = duracaoFinal > 0 ? (tempoAtualFinal / duracaoFinal) * 100 : 0
 
   return (
     <section aria-label="Verificação de acordo" className="w-full max-w-[640px] space-y-4">
@@ -222,12 +240,61 @@ export default function AcordoClient() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                className="block w-full rounded-full bg-[#1e40af] px-5 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:py-4 sm:text-base"
-              >
-                Ouvir instruções finais
-              </button>
+              {!mostrarPlayerFinal ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarPlayerFinal(true)}
+                  className="block w-full rounded-full bg-[#1e40af] px-5 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:py-4 sm:text-base"
+                >
+                  Ouvir instruções finais
+                </button>
+              ) : (
+                <section
+                  aria-label="Áudio das instruções finais"
+                  className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-6"
+                >
+                  <audio
+                    ref={audioFinalRef}
+                    src="/assets/instrucoes-finais.mp3"
+                    preload="auto"
+                    onPlay={() => setTocandoFinal(true)}
+                    onPause={() => setTocandoFinal(false)}
+                    onLoadedMetadata={(e) => setDuracaoFinal(e.currentTarget.duration)}
+                    onTimeUpdate={(e) => setTempoAtualFinal(e.currentTarget.currentTime)}
+                    onEnded={() => setTocandoFinal(false)}
+                  />
+
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={alternarPlayFinal}
+                      aria-label={tocandoFinal ? 'Pausar áudio' : 'Reproduzir áudio'}
+                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#1e40af] text-white transition-colors hover:bg-[#1a3696]"
+                    >
+                      {tocandoFinal ? (
+                        <Pause className="h-6 w-6" fill="currentColor" />
+                      ) : (
+                        <Play className="ml-0.5 h-6 w-6" fill="currentColor" />
+                      )}
+                    </button>
+
+                    <div className="flex-1">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div
+                          className="h-full rounded-full bg-[#1e40af] transition-[width]"
+                          style={{ width: `${progressoFinal}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-xs text-gray-500 sm:text-sm">
+                        <span>{formatTime(tempoAtualFinal)}</span>
+                        <span>{formatTime(duracaoFinal)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="mt-4 text-center text-sm text-gray-400">Ouça o áudio completo para continuar</p>
+                </section>
+              )}
             </>
           )}
         </>
