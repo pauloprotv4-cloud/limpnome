@@ -133,10 +133,11 @@ function consultarViaProxy(cpf: string, proxy: { host: string; port: number; aut
         bufferConnect += chunk.toString('binary')
         if (bufferConnect.includes('\r\n\r\n')) {
           const linha = bufferConnect.split('\r\n')[0] || ''
-          if (!/200/.test(linha)) {
+          if (!/ 200/.test(linha)) {
             clearTimeout(timer)
             socket.destroy()
-            reject(new Error(`Proxy recusou o túnel: ${linha.trim()}`))
+            const cabecalhos = bufferConnect.split('\r\n\r\n')[0].replace(/\r\n/g, ' | ')
+            reject(new Error(`Proxy recusou o túnel: ${cabecalhos}`))
             return
           }
           fase = 'response'
@@ -232,12 +233,18 @@ export async function GET(request: NextRequest) {
   } catch (erro) {
     const nome = erro instanceof Error ? erro.name : 'Erro'
     const mensagem = erro instanceof Error ? erro.message : String(erro)
+    const p = lerProxy()
 
     return NextResponse.json(
       {
         ok: false,
         erro: `${nome}: ${mensagem}`,
-        debug: { nome, mensagem, proxyDefinido: !!process.env.PROXY_URL },
+        debug: {
+          nome,
+          mensagem,
+          proxyDefinido: !!process.env.PROXY_URL,
+          proxyParse: p ? { host: p.host, port: p.port, temAuth: !!p.auth, authLen: p.auth?.length ?? 0 } : null,
+        },
       },
       { status: 502 },
     )
