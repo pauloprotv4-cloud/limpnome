@@ -117,59 +117,32 @@ function consultarViaSocks(cpf: string, proxy: ProxyInfo): Promise<{ status: num
 }
 
 // Monta a requisição HTTP crua para enviar dentro do túnel
-function montarRequisicaoCrua(cpf: string): string {
-  return (
-    `GET ${API_PATH}?CPF=${cpf} HTTP/1.1\r\n` +
-    `Host: ${API_HOST}\r\n` +
-    `Accept: application/json, text/plain, */*\r\n` +
-    `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36\r\n` +
-    `Connection: close\r\n\r\n`
-  )
-}
-
-// Extrai o corpo de uma resposta HTTP crua (após os cabeçalhos)
-function extrairCorpo(bruto: string): { status: number; corpo: string } {
-  const sep = bruto.indexOf('\r\n\r\n')
-  const cabecalho = sep >= 0 ? bruto.slice(0, sep) : bruto
-  let corpo = sep >= 0 ? bruto.slice(sep + 4) : ''
-
-  const linhaStatus = cabecalho.split('\r\n')[0] || ''
-  const status = Number(linhaStatus.split(' ')[1]) || 0
-
-  // decodifica chunked transfer encoding, se presente
-  if (/transfer-encoding:\s*chunked/i.test(cabecalho)) {
-    corpo = decodificarChunked(corpo)
-  }
-
-  return { status, corpo }
-}
-
-function decodificarChunked(dados: string): string {
-  let resultado = ''
-  let resto = dados
-  while (resto.length > 0) {
-    const idx = resto.indexOf('\r\n')
-    if (idx < 0) break
-    const tamanho = parseInt(resto.slice(0, idx), 16)
-    if (isNaN(tamanho) || tamanho === 0) break
-    resultado += resto.slice(idx + 2, idx + 2 + tamanho)
-    resto = resto.slice(idx + 2 + tamanho + 2)
-  }
-  return resultado || dados
-}
-
-// Consulta a API através de um túnel CONNECT no proxy residencial
-function consultarViaProxy(cpf: string, proxy: ProxyInfo): Promise<{ status: number; corpo: string }> {
+// Abre um túnel CONNECT no proxy e resolve com o socket já tunelado
+function abrirTunel(proxy: ProxyInfo): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     const socket = net.connect(proxy.port, proxy.host)
-    let fase: 'connect' | 'response' = 'connect'
     let bufferConnect = ''
-    let bufferResposta = ''
 
     const timer = setTimeout(() => {
       socket.destroy()
-      reject(new Error('Tempo de consulta excedido (30s)'))
-    }, 30000)
+      reject(new Error('Tempo de conexão com o proxy excedido (20s)'))
+    }, 20000)
+
+    const onData = (chunk: Buffer) => {
+      bufferConnect += chunk.toString('binary')
+      if (bufferConnect.includes('\r\n\r\n')) {
+        clearTimeout(timer)
+        socket.removeListener('data', onData)
+        const linha = bufferConnect.split('\r\n')[0] || ''
+        if (!/ 200/.test(linha)) {
+          socket.destroy()
+          const cabecalhos = bufferConnect.split('\r\n\r\n')[0].replace(/\r\n/g, ' | ')
+          reject(new Error(`Proxy recusou o túnel: ${cabecalhos}`))
+          return
+        }
+        resolve(socket)
+      }
+    }
 
     socket.on('connect', () => {
       let connectReq = `CONNECT ${API_HOST}:${API_PORT} HTTP/1.1\r\nHost: ${API_HOST}:${API_PORT}\r\n`
@@ -180,34 +153,48 @@ function consultarViaProxy(cpf: string, proxy: ProxyInfo): Promise<{ status: num
       socket.write(connectReq)
     })
 
-    socket.on('data', (chunk) => {
-      if (fase === 'connect') {
-        bufferConnect += chunk.toString('binary')
-        if (bufferConnect.includes('\r\n\r\n')) {
-          const linha = bufferConnect.split('\r\n')[0] || ''
-          if (!/ 200/.test(linha)) {
-            clearTimeout(timer)
-            socket.destroy()
-            const cabecalhos = bufferConnect.split('\r\n\r\n')[0].replace(/\r\n/g, ' | ')
-            reject(new Error(`Proxy recusou o túnel: ${cabecalhos}`))
-            return
-          }
-          fase = 'response'
-          socket.write(montarRequisicaoCrua(cpf))
-        }
-      } else {
-        bufferResposta += chunk.toString('utf8')
-      }
-    })
-
-    socket.on('end', () => {
-      clearTimeout(timer)
-      resolve(extrairCorpo(bufferResposta))
-    })
+    socket.on('data', onData)
     socket.on('error', (err) => {
       clearTimeout(timer)
       reject(err)
     })
+  })
+}
+
+// Consulta a API através de um túnel CONNECT no proxy residencial.
+// Depois de abrir o túnel, entrega o socket ao http.request para que o
+// próprio Node faça o parsing correto da resposta (status, chunked, etc.).
+async function consultarViaProxy(cpf: string, proxy: ProxyInfo): Promise<{ status: number; corpo: string }> {
+  const tunel = await abrirTunel(proxy)
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: API_HOST,
+        port: API_PORT,
+        path: `${API_PATH}?CPF=${cpf}`,
+        method: 'GET',
+        timeout: 30000,
+        createConnection: () => tunel,
+        headers: {
+          Host: API_HOST,
+          Accept: 'application/json, text/plain, */*',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          Connection: 'close',
+        },
+      },
+      (res) => {
+        let corpo = ''
+        res.setEncoding('utf8')
+        res.on('data', (chunk) => {
+          corpo += chunk
+        })
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, corpo }))
+      },
+    )
+    req.on('timeout', () => req.destroy(new Error('Tempo de consulta excedido (30s)')))
+    req.on('error', (err) => reject(err))
+    req.end()
   })
 }
 
