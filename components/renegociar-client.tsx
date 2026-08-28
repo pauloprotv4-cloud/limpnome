@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Info, Lock, ShieldCheck } from 'lucide-react'
 
 function formatarCpf(valor: string) {
@@ -97,6 +98,7 @@ const DADOS_CLIENTE = {
 }
 
 function DadosConfirmacao() {
+  const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const [videoTerminou, setVideoTerminou] = useState(false)
   const [iniciou, setIniciou] = useState(false)
@@ -196,6 +198,7 @@ function DadosConfirmacao() {
           <div className="mt-6 flex flex-col items-stretch justify-end gap-3 sm:flex-row sm:items-center">
             <button
               type="button"
+              onClick={() => router.push('/empresas')}
               className="rounded-full bg-[#1e40af] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1a3696] sm:text-base"
             >
               Sim, está correto.
