@@ -7,15 +7,15 @@ export default function AdvanceButton() {
   const [avancou, setAvancou] = useState(false)
 
   return (
-    <div className="flex flex-col items-start gap-3">
+    <div className="flex w-full flex-col items-center gap-3">
       <button
         type="button"
         onClick={() => setAvancou(true)}
-        className="group inline-flex min-h-14 items-center gap-4 rounded-full bg-primary px-7 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:-translate-y-0.5 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:outline-none active:translate-y-0"
+        className="group mt-7 inline-flex min-h-14 w-full max-w-md items-center justify-center rounded-full bg-[#2848b8] px-7 text-base font-bold tracking-wide text-white transition-colors hover:bg-[#1f3da3] focus-visible:ring-2 focus-visible:ring-[#2848b8] focus-visible:ring-offset-4 focus-visible:outline-none"
         aria-describedby="mensagem-avanco"
       >
-        {avancou ? 'Vamos começar' : 'Avançar'}
-        <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+        {avancou ? 'ACESSANDO...' : 'ACESSAR AGORA'}
+        <ArrowRight className="ml-3 size-5 transition-transform group-hover:translate-x-1" aria-hidden="true" />
       </button>
       <p id="mensagem-avanco" className="min-h-6 text-sm font-medium text-accent-foreground" aria-live="polite">
         {avancou ? 'Ótimo! O próximo passo está pronto para você.' : ''}
