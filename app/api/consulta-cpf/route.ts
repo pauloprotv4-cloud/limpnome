@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import http from 'node:http'
+import net from 'node:net'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -31,11 +32,134 @@ function extrairNome(dados: unknown): string | null {
   return null
 }
 
-// Faz uma requisição usando o módulo http nativo do Node.
-// O fetch do Node (undici) falha com "other side closed" neste servidor legado,
-// por isso usamos http.request. Alguns servidores antigos fecham a conexão
-// dependendo dos cabeçalhos, então testamos perfis diferentes.
-function requisicaoUnica(cpf: string, headers: http.OutgoingHttpHeaders): Promise<{ status: number; corpo: string }> {
+// Normaliza o PROXY_URL em partes utilizáveis.
+// Aceita formatos: http://user:pass@host:port  |  host:port:user:pass  |  host:port
+function lerProxy():
+  | { host: string; port: number; auth?: string }
+  | null {
+  const raw = (process.env.PROXY_URL || '').trim()
+  if (!raw) return null
+
+  // formato URL padrão
+  try {
+    const u = new URL(raw.includes('://') ? raw : `http://${raw}`)
+    if (u.hostname && u.port) {
+      const auth = u.username ? `${decodeURIComponent(u.username)}:${decodeURIComponent(u.password)}` : undefined
+      return { host: u.hostname, port: Number(u.port), auth }
+    }
+  } catch {
+    // tenta formato host:port:user:pass
+  }
+
+  const partes = raw.split(':')
+  if (partes.length === 4) {
+    const [host, port, user, pass] = partes
+    return { host, port: Number(port), auth: `${user}:${pass}` }
+  }
+  if (partes.length === 2) {
+    const [host, port] = partes
+    return { host, port: Number(port) }
+  }
+
+  return null
+}
+
+// Monta a requisição HTTP crua para enviar dentro do túnel
+function montarRequisicaoCrua(cpf: string): string {
+  return (
+    `GET ${API_PATH}?CPF=${cpf} HTTP/1.1\r\n` +
+    `Host: ${API_HOST}\r\n` +
+    `Accept: application/json, text/plain, */*\r\n` +
+    `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36\r\n` +
+    `Connection: close\r\n\r\n`
+  )
+}
+
+// Extrai o corpo de uma resposta HTTP crua (após os cabeçalhos)
+function extrairCorpo(bruto: string): { status: number; corpo: string } {
+  const sep = bruto.indexOf('\r\n\r\n')
+  const cabecalho = sep >= 0 ? bruto.slice(0, sep) : bruto
+  let corpo = sep >= 0 ? bruto.slice(sep + 4) : ''
+
+  const linhaStatus = cabecalho.split('\r\n')[0] || ''
+  const status = Number(linhaStatus.split(' ')[1]) || 0
+
+  // decodifica chunked transfer encoding, se presente
+  if (/transfer-encoding:\s*chunked/i.test(cabecalho)) {
+    corpo = decodificarChunked(corpo)
+  }
+
+  return { status, corpo }
+}
+
+function decodificarChunked(dados: string): string {
+  let resultado = ''
+  let resto = dados
+  while (resto.length > 0) {
+    const idx = resto.indexOf('\r\n')
+    if (idx < 0) break
+    const tamanho = parseInt(resto.slice(0, idx), 16)
+    if (isNaN(tamanho) || tamanho === 0) break
+    resultado += resto.slice(idx + 2, idx + 2 + tamanho)
+    resto = resto.slice(idx + 2 + tamanho + 2)
+  }
+  return resultado || dados
+}
+
+// Consulta a API através de um túnel CONNECT no proxy residencial
+function consultarViaProxy(cpf: string, proxy: { host: string; port: number; auth?: string }): Promise<{ status: number; corpo: string }> {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect(proxy.port, proxy.host)
+    let fase: 'connect' | 'response' = 'connect'
+    let bufferConnect = ''
+    let bufferResposta = ''
+
+    const timer = setTimeout(() => {
+      socket.destroy()
+      reject(new Error('Tempo de consulta excedido (30s)'))
+    }, 30000)
+
+    socket.on('connect', () => {
+      let connectReq = `CONNECT ${API_HOST}:${API_PORT} HTTP/1.1\r\nHost: ${API_HOST}:${API_PORT}\r\n`
+      if (proxy.auth) {
+        connectReq += `Proxy-Authorization: Basic ${Buffer.from(proxy.auth).toString('base64')}\r\n`
+      }
+      connectReq += `\r\n`
+      socket.write(connectReq)
+    })
+
+    socket.on('data', (chunk) => {
+      if (fase === 'connect') {
+        bufferConnect += chunk.toString('binary')
+        if (bufferConnect.includes('\r\n\r\n')) {
+          const linha = bufferConnect.split('\r\n')[0] || ''
+          if (!/200/.test(linha)) {
+            clearTimeout(timer)
+            socket.destroy()
+            reject(new Error(`Proxy recusou o túnel: ${linha.trim()}`))
+            return
+          }
+          fase = 'response'
+          socket.write(montarRequisicaoCrua(cpf))
+        }
+      } else {
+        bufferResposta += chunk.toString('utf8')
+      }
+    })
+
+    socket.on('end', () => {
+      clearTimeout(timer)
+      resolve(extrairCorpo(bufferResposta))
+    })
+    socket.on('error', (err) => {
+      clearTimeout(timer)
+      reject(err)
+    })
+  })
+}
+
+// Consulta direta (sem proxy) usando http nativo
+function consultarDireto(cpf: string): Promise<{ status: number; corpo: string }> {
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -45,7 +169,13 @@ function requisicaoUnica(cpf: string, headers: http.OutgoingHttpHeaders): Promis
         method: 'GET',
         timeout: 25000,
         agent: new http.Agent({ keepAlive: false }),
-        headers,
+        headers: {
+          Host: API_HOST,
+          Accept: 'application/json, text/plain, */*',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          Connection: 'close',
+        },
       },
       (res) => {
         let corpo = ''
@@ -53,48 +183,25 @@ function requisicaoUnica(cpf: string, headers: http.OutgoingHttpHeaders): Promis
         res.on('data', (chunk) => {
           corpo += chunk
         })
-        res.on('end', () => {
-          resolve({ status: res.statusCode ?? 0, corpo })
-        })
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, corpo }))
       },
     )
-
-    req.on('timeout', () => {
-      req.destroy(new Error('Tempo de consulta excedido (25s)'))
-    })
+    req.on('timeout', () => req.destroy(new Error('Tempo de consulta excedido (25s)')))
     req.on('error', (err) => reject(err))
     req.end()
   })
 }
 
-const PERFIS: http.OutgoingHttpHeaders[] = [
-  // Perfil 1: cabeçalhos mínimos
-  { Host: API_HOST, Accept: '*/*', Connection: 'close' },
-  // Perfil 2: com User-Agent de navegador
-  {
-    Host: API_HOST,
-    Accept: 'application/json, text/plain, */*',
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-    Connection: 'close',
-  },
-  // Perfil 3: User-Agent simples de cliente HTTP
-  { Host: API_HOST, Accept: '*/*', 'User-Agent': 'curl/8.4.0', Connection: 'close' },
-]
+async function consultarApi(cpf: string): Promise<{ status: number; corpo: string; via: string }> {
+  const proxy = lerProxy()
 
-async function consultarApi(cpf: string): Promise<{ status: number; corpo: string }> {
-  const erros: string[] = []
-  // tenta cada perfil, com uma repetição extra por perfil
-  for (let tentativa = 0; tentativa < 2; tentativa++) {
-    for (const headers of PERFIS) {
-      try {
-        return await requisicaoUnica(cpf, headers)
-      } catch (err) {
-        erros.push(err instanceof Error ? `${err.name}: ${err.message}` : String(err))
-      }
-    }
+  if (proxy) {
+    const { status, corpo } = await consultarViaProxy(cpf, proxy)
+    return { status, corpo, via: `proxy(${proxy.host})` }
   }
-  throw new Error(`Todas as tentativas falharam → ${erros.join(' | ')}`)
+
+  const { status, corpo } = await consultarDireto(cpf)
+  return { status, corpo, via: 'direto' }
 }
 
 export async function GET(request: NextRequest) {
@@ -105,7 +212,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { status, corpo } = await consultarApi(cpf)
+    const { status, corpo, via } = await consultarApi(cpf)
 
     let dados: unknown = corpo
     try {
@@ -120,7 +227,7 @@ export async function GET(request: NextRequest) {
       ok: true,
       nome,
       dados,
-      debug: { status, amostra: corpo.slice(0, 500) },
+      debug: { status, via, amostra: corpo.slice(0, 500) },
     })
   } catch (erro) {
     const nome = erro instanceof Error ? erro.name : 'Erro'
@@ -130,7 +237,7 @@ export async function GET(request: NextRequest) {
       {
         ok: false,
         erro: `${nome}: ${mensagem}`,
-        debug: { nome, mensagem },
+        debug: { nome, mensagem, proxyDefinido: !!process.env.PROXY_URL },
       },
       { status: 502 },
     )
