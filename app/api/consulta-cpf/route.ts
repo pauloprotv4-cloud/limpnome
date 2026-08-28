@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import http from 'node:http'
 import net from 'node:net'
-import { SocksProxyAgent } from 'socks-proxy-agent'
+import { SocksClient } from 'socks'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -81,10 +81,28 @@ function lerProxy(): ProxyInfo | null {
   return null
 }
 
-// Consulta a API através de um proxy SOCKS5 usando http nativo + SocksProxyAgent
-function consultarViaSocks(cpf: string, proxy: ProxyInfo): Promise<{ status: number; corpo: string }> {
+// Consulta a API através de um proxy SOCKS5.
+// Usa SocksClient diretamente para obter erros de handshake explícitos
+// (ex.: "Authentication failed") e resolução de DNS no lado do proxy.
+async function consultarViaSocks(cpf: string, proxy: ProxyInfo): Promise<{ status: number; corpo: string }> {
+  const [usuario, senha] = proxy.auth ? proxy.auth.split(':') : [undefined, undefined]
+
+  const info = await SocksClient.createConnection({
+    proxy: {
+      host: proxy.host,
+      port: proxy.port,
+      type: 5,
+      ...(usuario ? { userId: usuario, password: senha ?? '' } : {}),
+    },
+    command: 'connect',
+    // envia o hostname para o proxy resolver (DNS remoto)
+    destination: { host: API_HOST, port: API_PORT },
+    timeout: 20000,
+  })
+
+  const socket = info.socket
+
   return new Promise((resolve, reject) => {
-    const agent = new SocksProxyAgent(proxy.url, { timeout: 20000 })
     const req = http.request(
       {
         host: API_HOST,
@@ -92,7 +110,7 @@ function consultarViaSocks(cpf: string, proxy: ProxyInfo): Promise<{ status: num
         path: `${API_PATH}?CPF=${cpf}`,
         method: 'GET',
         timeout: 30000,
-        agent,
+        createConnection: () => socket,
         headers: {
           Host: API_HOST,
           Accept: 'application/json, text/plain, */*',
