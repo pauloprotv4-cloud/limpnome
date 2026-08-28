@@ -11,48 +11,20 @@ function formatarCpf(valor: string) {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
 }
 
-type Resultado = {
-  nome: string | null
-  debug?: unknown
-}
-
 export default function RenegociarClient() {
   const [cpf, setCpf] = useState('')
-  const [consultando, setConsultando] = useState(false)
-  const [erro, setErro] = useState<string | null>(null)
-  const [resultado, setResultado] = useState<Resultado | null>(null)
+  const [enviado, setEnviado] = useState(false)
 
   const valido = cpf.replace(/\D/g, '').length === 11
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!valido || consultando) return
-
-    setConsultando(true)
-    setErro(null)
-
-    try {
-      const digitos = cpf.replace(/\D/g, '')
-      const resposta = await fetch(`/api/consulta-cpf?cpf=${digitos}`, { cache: 'no-store' })
-      const dados = await resposta.json()
-
-      console.log('[v0] resposta consulta-cpf:', dados)
-
-      if (!resposta.ok || !dados.ok) {
-        const detalhe = dados?.debug ? ` (${JSON.stringify(dados.debug)})` : ''
-        throw new Error((dados?.erro || 'Não foi possível consultar o CPF.') + detalhe)
-      }
-
-      setResultado({ nome: dados.nome, debug: dados.debug })
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível consultar o CPF. Tente novamente.')
-    } finally {
-      setConsultando(false)
-    }
+    if (!valido) return
+    setEnviado(true)
   }
 
-  if (resultado) {
-    const nome = resultado.nome?.toUpperCase() || 'CLIENTE'
+  if (enviado) {
+    const nome = 'CLIENTE'
     return (
       <article className="w-full max-w-[640px] space-y-6 rounded-lg bg-white px-4 py-6 shadow-sm sm:px-6 sm:py-8 md:px-10 md:py-10">
         <img
@@ -89,12 +61,6 @@ export default function RenegociarClient() {
             Seu navegador não suporta a reprodução de vídeo.
           </video>
         </section>
-
-        {resultado.debug ? (
-          <pre className="overflow-x-auto rounded-lg bg-gray-100 p-3 text-[10px] leading-tight text-gray-700">
-            {JSON.stringify(resultado.debug, null, 2)}
-          </pre>
-        ) : null}
       </article>
     )
   }
@@ -125,27 +91,18 @@ export default function RenegociarClient() {
           autoComplete="off"
           placeholder="000.000.000-00"
           value={cpf}
-          onChange={(e) => {
-            setCpf(formatarCpf(e.target.value))
-            setErro(null)
-          }}
+          onChange={(e) => setCpf(formatarCpf(e.target.value))}
           className="w-full rounded-lg border border-gray-300 px-3 py-3.5 text-base text-gray-700 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#1e40af] focus:outline-none sm:px-4 sm:py-4 sm:text-lg"
           required
         />
         <button
           type="submit"
-          disabled={!valido || consultando}
+          disabled={!valido}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#1e40af] py-3.5 text-base font-semibold text-white transition-colors hover:bg-[#1a3696] disabled:cursor-not-allowed disabled:opacity-70 sm:mt-5 sm:py-4 sm:text-lg"
         >
-          {consultando ? 'Consultando...' : 'Continuar'}
+          Continuar
         </button>
       </form>
-
-      {erro && (
-        <p role="alert" className="mt-3 text-center text-sm text-red-600">
-          {erro}
-        </p>
-      )}
 
       <div className="mt-6 flex items-start gap-3 rounded-lg bg-[#eef2ff] px-4 py-4 text-sm text-[#1e40af] sm:text-base">
         <Info className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
