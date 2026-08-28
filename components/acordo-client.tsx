@@ -24,6 +24,7 @@ export default function AcordoClient() {
   const [duracao, setDuracao] = useState(0)
   const [audioTerminou, setAudioTerminou] = useState(false)
   const [mensagensVisiveis, setMensagensVisiveis] = useState(0)
+  const [confirmou, setConfirmou] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   // Simula a verificação de acordos antes de revelar o resultado.
@@ -201,11 +202,31 @@ export default function AcordoClient() {
                 </p>
               </div>
 
+              {!confirmou && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmou(true)}
+                  className="block w-full rounded-full bg-[#1e40af] px-5 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:py-4 sm:text-base"
+                >
+                  Confirmar o acordo e limpar o nome
+                </button>
+              )}
+            </>
+          )}
+
+          {confirmou && (
+            <>
+              <div className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm sm:px-6 sm:py-4">
+                <p className="text-sm font-bold leading-relaxed text-gray-900 sm:text-base">
+                  Processando confirmação... Ouça as instruções finais:
+                </p>
+              </div>
+
               <button
                 type="button"
                 className="block w-full rounded-full bg-[#1e40af] px-5 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:py-4 sm:text-base"
               >
-                Confirmar o acordo e limpar o nome
+                Ouvir instruções finais
               </button>
             </>
           )}
