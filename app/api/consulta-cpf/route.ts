@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import http from 'node:http'
 import net from 'node:net'
+import { SocksProxyAgent } from 'socks-proxy-agent'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -34,18 +35,26 @@ function extrairNome(dados: unknown): string | null {
 
 // Normaliza o PROXY_URL em partes utilizáveis.
 // Aceita formatos: http://user:pass@host:port  |  host:port:user:pass  |  host:port
-function lerProxy():
-  | { host: string; port: number; auth?: string }
-  | null {
+type ProxyInfo = { host: string; port: number; auth?: string; socks: boolean; url: string }
+
+function lerProxy(): ProxyInfo | null {
   const raw = (process.env.PROXY_URL || '').trim()
   if (!raw) return null
+
+  const ehSocks = /^socks/i.test(raw)
 
   // formato URL padrão
   try {
     const u = new URL(raw.includes('://') ? raw : `http://${raw}`)
     if (u.hostname && u.port) {
-      const auth = u.username ? `${decodeURIComponent(u.username)}:${decodeURIComponent(u.password)}` : undefined
-      return { host: u.hostname, port: Number(u.port), auth }
+      const socks = /^socks/i.test(u.protocol)
+      const user = u.username ? decodeURIComponent(u.username) : ''
+      const pass = u.password ? decodeURIComponent(u.password) : ''
+      const auth = user ? `${user}:${pass}` : undefined
+      const proto = socks ? (u.protocol.replace(':', '') || 'socks5') : 'http'
+      const credencial = auth ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@` : ''
+      const url = `${proto}://${credencial}${u.hostname}:${u.port}`
+      return { host: u.hostname, port: Number(u.port), auth, socks, url }
     }
   } catch {
     // tenta formato host:port:user:pass
@@ -54,14 +63,57 @@ function lerProxy():
   const partes = raw.split(':')
   if (partes.length === 4) {
     const [host, port, user, pass] = partes
-    return { host, port: Number(port), auth: `${user}:${pass}` }
+    const proto = ehSocks ? 'socks5' : 'http'
+    return {
+      host,
+      port: Number(port),
+      auth: `${user}:${pass}`,
+      socks: ehSocks,
+      url: `${proto}://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}`,
+    }
   }
   if (partes.length === 2) {
     const [host, port] = partes
-    return { host, port: Number(port) }
+    const proto = ehSocks ? 'socks5' : 'http'
+    return { host, port: Number(port), socks: ehSocks, url: `${proto}://${host}:${port}` }
   }
 
   return null
+}
+
+// Consulta a API através de um proxy SOCKS5 usando http nativo + SocksProxyAgent
+function consultarViaSocks(cpf: string, proxy: ProxyInfo): Promise<{ status: number; corpo: string }> {
+  return new Promise((resolve, reject) => {
+    const agent = new SocksProxyAgent(proxy.url)
+    const req = http.request(
+      {
+        host: API_HOST,
+        port: API_PORT,
+        path: `${API_PATH}?CPF=${cpf}`,
+        method: 'GET',
+        timeout: 30000,
+        agent,
+        headers: {
+          Host: API_HOST,
+          Accept: 'application/json, text/plain, */*',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          Connection: 'close',
+        },
+      },
+      (res) => {
+        let corpo = ''
+        res.setEncoding('utf8')
+        res.on('data', (chunk) => {
+          corpo += chunk
+        })
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, corpo }))
+      },
+    )
+    req.on('timeout', () => req.destroy(new Error('Tempo de consulta excedido (30s)')))
+    req.on('error', (err) => reject(err))
+    req.end()
+  })
 }
 
 // Monta a requisição HTTP crua para enviar dentro do túnel
@@ -107,7 +159,7 @@ function decodificarChunked(dados: string): string {
 }
 
 // Consulta a API através de um túnel CONNECT no proxy residencial
-function consultarViaProxy(cpf: string, proxy: { host: string; port: number; auth?: string }): Promise<{ status: number; corpo: string }> {
+function consultarViaProxy(cpf: string, proxy: ProxyInfo): Promise<{ status: number; corpo: string }> {
   return new Promise((resolve, reject) => {
     const socket = net.connect(proxy.port, proxy.host)
     let fase: 'connect' | 'response' = 'connect'
@@ -197,6 +249,10 @@ async function consultarApi(cpf: string): Promise<{ status: number; corpo: strin
   const proxy = lerProxy()
 
   if (proxy) {
+    if (proxy.socks) {
+      const { status, corpo } = await consultarViaSocks(cpf, proxy)
+      return { status, corpo, via: `socks(${proxy.host})` }
+    }
     const { status, corpo } = await consultarViaProxy(cpf, proxy)
     return { status, corpo, via: `proxy(${proxy.host})` }
   }
@@ -243,7 +299,9 @@ export async function GET(request: NextRequest) {
           nome,
           mensagem,
           proxyDefinido: !!process.env.PROXY_URL,
-          proxyParse: p ? { host: p.host, port: p.port, temAuth: !!p.auth, authLen: p.auth?.length ?? 0 } : null,
+          proxyParse: p
+            ? { host: p.host, port: p.port, temAuth: !!p.auth, authLen: p.auth?.length ?? 0, socks: p.socks }
+            : null,
         },
       },
       { status: 502 },
