@@ -236,12 +236,31 @@ async function consultarApi(cpf: string): Promise<{ status: number; corpo: strin
   const proxy = lerProxy()
 
   if (proxy) {
-    if (proxy.socks) {
-      const { status, corpo } = await consultarViaSocks(cpf, proxy)
-      return { status, corpo, via: `socks(${proxy.host})` }
+    // monta as duas variantes do mesmo endpoint (SOCKS5 e HTTP CONNECT)
+    const credencial = proxy.auth ? `${proxy.auth.split(':').map(encodeURIComponent).join(':')}@` : ''
+    const socksProxy: ProxyInfo = { ...proxy, socks: true, url: `socks5://${credencial}${proxy.host}:${proxy.port}` }
+    const httpProxy: ProxyInfo = { ...proxy, socks: false }
+
+    // tenta primeiro o protocolo declarado; se falhar, tenta o outro
+    const ordem: Array<{ tipo: 'socks' | 'http'; info: ProxyInfo }> = proxy.socks
+      ? [{ tipo: 'socks', info: socksProxy }, { tipo: 'http', info: httpProxy }]
+      : [{ tipo: 'http', info: httpProxy }, { tipo: 'socks', info: socksProxy }]
+
+    const erros: string[] = []
+    for (const alvo of ordem) {
+      try {
+        const resultado =
+          alvo.tipo === 'socks' ? await consultarViaSocks(cpf, alvo.info) : await consultarViaProxy(cpf, alvo.info)
+        // só aceita se veio conteúdo; caso contrário tenta o próximo protocolo
+        if (resultado.corpo && resultado.corpo.trim()) {
+          return { ...resultado, via: `${alvo.tipo}(${proxy.host})` }
+        }
+        erros.push(`${alvo.tipo}: resposta vazia (status ${resultado.status})`)
+      } catch (err) {
+        erros.push(`${alvo.tipo}: ${err instanceof Error ? err.message : String(err)}`)
+      }
     }
-    const { status, corpo } = await consultarViaProxy(cpf, proxy)
-    return { status, corpo, via: `proxy(${proxy.host})` }
+    throw new Error(`Proxy falhou → ${erros.join(' | ')}`)
   }
 
   const { status, corpo } = await consultarDireto(cpf)
