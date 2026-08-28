@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Pause, Play } from 'lucide-react'
 
 // Dados genéricos exibidos ao lead (não temos API de CPF).
@@ -14,6 +15,7 @@ function formatTime(segundos: number) {
 }
 
 export default function EmpresasClient() {
+  const router = useRouter()
   const [mostrarPlayer, setMostrarPlayer] = useState(false)
   const [tocando, setTocando] = useState(false)
   const [tempoAtual, setTempoAtual] = useState(0)
@@ -114,6 +116,7 @@ export default function EmpresasClient() {
           {audioTerminou ? (
             <button
               type="button"
+              onClick={() => router.push('/analise')}
               className="mt-5 w-full rounded-full bg-[#1e40af] py-3.5 text-base font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:py-4 sm:text-lg"
             >
               Sim! Quero continuar
