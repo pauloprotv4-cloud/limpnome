@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Pause, Play } from 'lucide-react'
 
 // Dados genéricos exibidos ao lead (não temos API de CPF).
@@ -17,6 +18,7 @@ function formatTime(segundos: number) {
 const CODIGO_ACORDO = 'X1EX4-1XO--'
 
 export default function AcordoClient() {
+  const router = useRouter()
   const [encontrado, setEncontrado] = useState(false)
   const [mostrarPlayer, setMostrarPlayer] = useState(false)
   const [tocando, setTocando] = useState(false)
@@ -44,7 +46,20 @@ export default function AcordoClient() {
   const [tocandoPagamento, setTocandoPagamento] = useState(false)
   const [tempoAtualPagamento, setTempoAtualPagamento] = useState(0)
   const [duracaoPagamento, setDuracaoPagamento] = useState(0)
+  const [pagamentoTerminou, setPagamentoTerminou] = useState(false)
   const audioPagamentoRef = useRef<HTMLAudioElement>(null)
+
+  // Detalhes do acordo e orientações de pagamento.
+  const [mostrarDetalhes, setMostrarDetalhes] = useState(false)
+  const [mostrarOrientacoes, setMostrarOrientacoes] = useState(false)
+  const [mostrarPlayerAviso, setMostrarPlayerAviso] = useState(false)
+
+  // Player das orientações de pagamento (quarto áudio - aviso).
+  const [tocandoAviso, setTocandoAviso] = useState(false)
+  const [tempoAtualAviso, setTempoAtualAviso] = useState(0)
+  const [duracaoAviso, setDuracaoAviso] = useState(0)
+  const [avisoTerminou, setAvisoTerminou] = useState(false)
+  const audioAvisoRef = useRef<HTMLAudioElement>(null)
 
   // Simula a verificação de acordos antes de revelar o resultado.
   useEffect(() => {
@@ -91,9 +106,20 @@ export default function AcordoClient() {
     }
   }
 
+  const alternarPlayAviso = () => {
+    const audio = audioAvisoRef.current
+    if (!audio) return
+    if (audio.paused) {
+      audio.play().catch(() => {})
+    } else {
+      audio.pause()
+    }
+  }
+
   const progresso = duracao > 0 ? (tempoAtual / duracao) * 100 : 0
   const progressoFinal = duracaoFinal > 0 ? (tempoAtualFinal / duracaoFinal) * 100 : 0
   const progressoPagamento = duracaoPagamento > 0 ? (tempoAtualPagamento / duracaoPagamento) * 100 : 0
+  const progressoAviso = duracaoAviso > 0 ? (tempoAtualAviso / duracaoAviso) * 100 : 0
 
   return (
     <section aria-label="Verificação de acordo" className="w-full max-w-[640px] space-y-4">
@@ -374,7 +400,10 @@ export default function AcordoClient() {
                     onPause={() => setTocandoPagamento(false)}
                     onLoadedMetadata={(e) => setDuracaoPagamento(e.currentTarget.duration)}
                     onTimeUpdate={(e) => setTempoAtualPagamento(e.currentTarget.currentTime)}
-                    onEnded={() => setTocandoPagamento(false)}
+                    onEnded={() => {
+                      setTocandoPagamento(false)
+                      setPagamentoTerminou(true)
+                    }}
                   />
 
                   <div className="flex items-center gap-4">
@@ -405,8 +434,145 @@ export default function AcordoClient() {
                     </div>
                   </div>
 
-                  <p className="mt-4 text-center text-sm text-gray-400">Ouça o áudio completo para continuar</p>
+                  {pagamentoTerminou ? (
+                    <button
+                      type="button"
+                      onClick={() => setMostrarDetalhes(true)}
+                      disabled={mostrarDetalhes}
+                      className="mt-5 w-full rounded-full bg-[#1e40af] py-3.5 text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] disabled:opacity-60 sm:py-4 sm:text-base"
+                    >
+                      Ver detalhes do acordo
+                    </button>
+                  ) : (
+                    <p className="mt-4 text-center text-sm text-gray-400">Ouça o áudio completo para continuar</p>
+                  )}
                 </section>
+              )}
+
+              {mostrarDetalhes && (
+                <>
+                  <div className="w-full rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4 shadow-sm sm:px-6 sm:py-5">
+                    <p className="text-sm leading-relaxed text-gray-700 sm:text-base">
+                      Acordo confirmado: {CODIGO_ACORDO}!
+                    </p>
+                    <p className="mt-3 text-sm leading-relaxed text-gray-700 sm:text-base">Beneficiário(a):</p>
+                    <p className="text-sm font-bold text-gray-900 sm:text-base">{NOME_CLIENTE}</p>
+                    <p className="mt-3 text-sm leading-relaxed text-gray-700 sm:text-base">Identificação (CPF):</p>
+                    <p className="text-sm font-bold text-gray-900 sm:text-base">{CPF_CLIENTE}</p>
+                    <p className="mt-3 text-sm leading-relaxed text-[#1e40af] sm:text-base">
+                      Quitação de todas as dívidas em ativo no CPF.
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-gray-900 sm:text-base">895 Pontos no score.</p>
+                    <p className="mt-1 text-sm leading-relaxed text-gray-700 sm:text-base">
+                      Valor da proposta: R$ 68,92
+                    </p>
+                  </div>
+
+                  {!mostrarOrientacoes && (
+                    <button
+                      type="button"
+                      onClick={() => setMostrarOrientacoes(true)}
+                      className="self-end rounded-full bg-[#1e40af] px-8 py-3 text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:text-base"
+                    >
+                      Continuar para o pagamento
+                    </button>
+                  )}
+                </>
+              )}
+
+              {mostrarOrientacoes && (
+                <>
+                  <div className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm sm:px-6 sm:py-4">
+                    <p className="text-sm font-bold leading-relaxed text-gray-900 sm:text-base">
+                      Antes de prosseguir para o pagamento, ouça as orientações finais:
+                    </p>
+                  </div>
+
+                  {!mostrarPlayerAviso ? (
+                    <button
+                      type="button"
+                      onClick={() => setMostrarPlayerAviso(true)}
+                      className="block w-full rounded-full bg-[#1e40af] px-5 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:py-4 sm:text-base"
+                    >
+                      Ouvir instruções de pagamento
+                    </button>
+                  ) : (
+                    <section
+                      aria-label="Áudio das orientações de pagamento"
+                      className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-6"
+                    >
+                      <audio
+                        ref={audioAvisoRef}
+                        src="/assets/aviso.mp3"
+                        preload="auto"
+                        onPlay={() => setTocandoAviso(true)}
+                        onPause={() => setTocandoAviso(false)}
+                        onLoadedMetadata={(e) => setDuracaoAviso(e.currentTarget.duration)}
+                        onTimeUpdate={(e) => setTempoAtualAviso(e.currentTarget.currentTime)}
+                        onEnded={() => {
+                          setTocandoAviso(false)
+                          setAvisoTerminou(true)
+                        }}
+                      />
+
+                      <div className="flex items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={alternarPlayAviso}
+                          aria-label={tocandoAviso ? 'Pausar áudio' : 'Reproduzir áudio'}
+                          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#1e40af] text-white transition-colors hover:bg-[#1a3696]"
+                        >
+                          {tocandoAviso ? (
+                            <Pause className="h-6 w-6" fill="currentColor" />
+                          ) : (
+                            <Play className="ml-0.5 h-6 w-6" fill="currentColor" />
+                          )}
+                        </button>
+
+                        <div className="flex-1">
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                            <div
+                              className="h-full rounded-full bg-[#1e40af] transition-[width]"
+                              style={{ width: `${progressoAviso}%` }}
+                            />
+                          </div>
+                          <div className="mt-2 flex items-center justify-between text-xs text-gray-500 sm:text-sm">
+                            <span>{formatTime(tempoAtualAviso)}</span>
+                            <span>{formatTime(duracaoAviso)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {!avisoTerminou && (
+                        <p className="mt-4 text-center text-sm text-gray-400">Ouça o áudio completo para continuar</p>
+                      )}
+                    </section>
+                  )}
+                </>
+              )}
+
+              {avisoTerminou && (
+                <>
+                  <div className="w-fit max-w-full rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm sm:px-6 sm:py-4">
+                    <p className="text-sm leading-relaxed text-gray-700 sm:text-base">
+                      <span className="font-bold italic text-gray-900">Atenção!</span> Oferta Válida Apenas para hoje.
+                    </p>
+                  </div>
+
+                  <div className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3.5 shadow-sm sm:px-6 sm:py-4">
+                    <p className="text-sm italic leading-relaxed text-gray-700 sm:text-base">
+                      Clique no botão abaixo para acessar a próxima tela e realizar seu pagamento
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => router.push('/pagamento')}
+                    className="block w-full rounded-full bg-[#1e40af] px-5 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#1a3696] sm:py-4 sm:text-base"
+                  >
+                    Realizar pagamento do acordo e limpar meu nome
+                  </button>
+                </>
               )}
             </>
           )}
