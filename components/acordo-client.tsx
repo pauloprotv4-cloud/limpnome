@@ -4,10 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pause, Play } from 'lucide-react'
 
-// Dados genéricos exibidos ao lead (não temos API de CPF).
-const NOME_CLIENTE = 'CLIENTE'
-const CPF_CLIENTE = '000.000.000-00'
-
 function formatTime(segundos: number) {
   if (!Number.isFinite(segundos) || segundos < 0) segundos = 0
   const min = Math.floor(segundos / 60)
@@ -17,7 +13,15 @@ function formatTime(segundos: number) {
 
 const CODIGO_ACORDO = 'X1EX4-1XO--'
 
-export default function AcordoClient() {
+export default function AcordoClient({
+  nome = 'CLIENTE',
+  cpf = '000.000.000-00',
+}: {
+  nome?: string
+  cpf?: string
+}) {
+  const NOME_CLIENTE = nome
+  const CPF_CLIENTE = cpf
   const router = useRouter()
   const [encontrado, setEncontrado] = useState(false)
   const [mostrarPlayer, setMostrarPlayer] = useState(false)

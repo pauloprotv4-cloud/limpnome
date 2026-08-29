@@ -1,7 +1,10 @@
 import { Headphones, Moon } from 'lucide-react'
 import EmpresasClient from '@/components/empresas-client'
+import { lerConsulta } from '@/lib/consulta-server'
 
-export default function EmpresasPage() {
+export default async function EmpresasPage() {
+  const dados = await lerConsulta()
+
   return (
     <div className="min-h-screen bg-[#eeeeee]">
       <header className="border-t-4 border-[#1e293b] bg-white">
@@ -16,7 +19,7 @@ export default function EmpresasPage() {
       </header>
 
       <main className="flex justify-center px-4 py-10 sm:py-14">
-        <EmpresasClient />
+        <EmpresasClient nome={dados.nome} />
       </main>
     </div>
   )

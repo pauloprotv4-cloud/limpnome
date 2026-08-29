@@ -2,8 +2,6 @@
 
 import { useRouter } from 'next/navigation'
 
-// Dados genéricos exibidos ao lead (não temos API de CPF).
-const CPF_CLIENTE = '000.000.000-00'
 const SCORE = 365
 const SCORE_MAXIMO = 1000
 
@@ -11,7 +9,7 @@ const SCORE_MAXIMO = 1000
 const COMPRIMENTO_ARCO = 147.6548547187203
 const OFFSET = COMPRIMENTO_ARCO - (SCORE / SCORE_MAXIMO) * COMPRIMENTO_ARCO
 
-export default function AnaliseClient() {
+export default function AnaliseClient({ cpf = '000.000.000-00' }: { cpf?: string }) {
   const router = useRouter()
 
   return (
@@ -31,7 +29,7 @@ export default function AnaliseClient() {
 
       <div className="w-fit max-w-full rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3.5 shadow-sm sm:px-6 sm:py-5">
         <p className="text-sm leading-relaxed text-gray-700 sm:text-base">Situação para CPF:</p>
-        <p className="mt-1 text-base font-bold text-[#1e40af] sm:text-lg">{CPF_CLIENTE}</p>
+        <p className="mt-1 text-base font-bold text-[#1e40af] sm:text-lg">{cpf}</p>
         <p className="mt-1 text-base font-bold text-gray-900 sm:text-lg">NEGATIVADO.</p>
       </div>
 

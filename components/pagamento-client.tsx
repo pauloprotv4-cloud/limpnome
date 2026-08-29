@@ -2,12 +2,18 @@
 
 import { AlertTriangle } from 'lucide-react'
 
-// Dados genéricos exibidos ao lead (não temos API de CPF).
-const NOME_CLIENTE = 'CLIENTE'
-const CPF_CLIENTE = '000.000.000-00'
 const CODIGO_ACORDO = 'XXJIN-Jd8--'
 
-export default function PagamentoClient() {
+export default function PagamentoClient({
+  nome = 'CLIENTE',
+  cpf = '000.000.000-00',
+}: {
+  nome?: string
+  cpf?: string
+}) {
+  const NOME_CLIENTE = nome
+  const CPF_CLIENTE = cpf
+
   return (
     <section aria-label="Pagamento do acordo" className="w-full max-w-[640px] space-y-5">
       <div className="flex items-start gap-3 rounded-2xl border border-yellow-200 bg-yellow-100 px-4 py-4 sm:px-6 sm:py-5">

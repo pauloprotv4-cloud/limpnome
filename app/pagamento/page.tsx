@@ -1,7 +1,10 @@
 import { Headphones, Moon } from 'lucide-react'
 import PagamentoClient from '@/components/pagamento-client'
+import { lerConsulta } from '@/lib/consulta-server'
 
-export default function PagamentoPage() {
+export default async function PagamentoPage() {
+  const dados = await lerConsulta()
+
   return (
     <div className="min-h-screen bg-[#eeeeee]">
       <header className="border-t-4 border-[#1e293b] bg-white">
@@ -16,7 +19,7 @@ export default function PagamentoPage() {
       </header>
 
       <main className="flex justify-center px-4 py-10 sm:py-14">
-        <PagamentoClient />
+        <PagamentoClient nome={dados.nome} cpf={dados.cpf} />
       </main>
     </div>
   )

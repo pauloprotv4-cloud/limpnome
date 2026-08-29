@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Info, Lock, ShieldCheck } from 'lucide-react'
+import { Info, Loader2, Lock, ShieldCheck } from 'lucide-react'
+import { CONSULTA_PADRAO, type ConsultaData } from '@/lib/consulta'
 
 function formatarCpf(valor: string) {
   const digitos = valor.replace(/\D/g, '').slice(0, 11)
@@ -15,17 +16,44 @@ function formatarCpf(valor: string) {
 export default function RenegociarClient() {
   const [cpf, setCpf] = useState('')
   const [enviado, setEnviado] = useState(false)
+  const [carregando, setCarregando] = useState(false)
+  const [erro, setErro] = useState('')
+  const [dados, setDados] = useState<ConsultaData>(CONSULTA_PADRAO)
 
   const valido = cpf.replace(/\D/g, '').length === 11
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!valido) return
-    setEnviado(true)
+    if (!valido || carregando) return
+
+    setErro('')
+    setCarregando(true)
+
+    try {
+      const resposta = await fetch('/api/cpf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpf: cpf.replace(/\D/g, '') }),
+      })
+
+      const json = await resposta.json().catch(() => null)
+
+      if (!resposta.ok || !json?.ok) {
+        setErro(json?.error || 'Não foi possível concluir a consulta agora.')
+        return
+      }
+
+      setDados(json.data as ConsultaData)
+      setEnviado(true)
+    } catch {
+      setErro('Não foi possível concluir a consulta agora.')
+    } finally {
+      setCarregando(false)
+    }
   }
 
   if (enviado) {
-    return <DadosConfirmacao />
+    return <DadosConfirmacao dados={dados} />
   }
 
   return (
@@ -60,11 +88,24 @@ export default function RenegociarClient() {
         />
         <button
           type="submit"
-          disabled={!valido}
+          disabled={!valido || carregando}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#1e40af] py-3.5 text-base font-semibold text-white transition-colors hover:bg-[#1a3696] disabled:cursor-not-allowed disabled:opacity-70 sm:mt-5 sm:py-4 sm:text-lg"
         >
-          Continuar
+          {carregando ? (
+            <>
+              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+              Consultando...
+            </>
+          ) : (
+            'Continuar'
+          )}
         </button>
+
+        {erro && (
+          <p role="alert" className="mt-3 text-center text-sm font-medium text-red-600">
+            {erro}
+          </p>
+        )}
       </form>
 
       <div className="mt-6 flex items-start gap-3 rounded-lg bg-[#eef2ff] px-4 py-4 text-sm text-[#1e40af] sm:text-base">
@@ -89,15 +130,7 @@ export default function RenegociarClient() {
   )
 }
 
-// Dados genéricos exibidos após o vídeo (não temos API de CPF)
-const DADOS_CLIENTE = {
-  nome: 'CLIENTE',
-  cpf: '000.000.000-00',
-  nascimento: '01/01/1985',
-  idade: 40,
-}
-
-function DadosConfirmacao() {
+function DadosConfirmacao({ dados }: { dados: ConsultaData }) {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const [videoTerminou, setVideoTerminou] = useState(false)
@@ -145,7 +178,7 @@ function DadosConfirmacao() {
         className="w-full rounded-xl bg-[#1e40af] px-4 py-5 text-sm leading-relaxed text-white shadow-sm sm:px-6 sm:py-6 sm:text-base"
       >
         <p>
-          Olá <span className="font-bold">{DADOS_CLIENTE.nome}</span>, esse é um canal oficial de atendimento do
+          Olá <span className="font-bold">{dados.nome}</span>, esse é um canal oficial de atendimento do
           Desenrola Brasil e os seus dados estão seguros conosco. 🔒
         </p>
       </section>
@@ -181,16 +214,17 @@ function DadosConfirmacao() {
           <dl className="mt-4 space-y-3 text-sm sm:text-base">
             <div>
               <dt className="font-bold text-gray-900">Nome:</dt>
-              <dd className="text-[#1e40af]">{DADOS_CLIENTE.nome}</dd>
+              <dd className="text-[#1e40af]">{dados.nome}</dd>
             </div>
             <div>
               <dt className="font-bold text-gray-900">CPF:</dt>
-              <dd className="text-[#1e40af]">{DADOS_CLIENTE.cpf}</dd>
+              <dd className="text-[#1e40af]">{dados.cpf}</dd>
             </div>
             <div>
               <dt className="font-bold text-gray-900">Data de Nascimento:</dt>
               <dd className="text-[#1e40af]">
-                {DADOS_CLIENTE.nascimento} ({DADOS_CLIENTE.idade} anos)
+                {dados.nascimento}
+                {dados.idade > 0 ? ` (${dados.idade} anos)` : ''}
               </dd>
             </div>
           </dl>

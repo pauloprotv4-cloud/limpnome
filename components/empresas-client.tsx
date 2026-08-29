@@ -4,9 +4,6 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pause, Play } from 'lucide-react'
 
-// Dados genéricos exibidos ao lead (não temos API de CPF).
-const NOME_CLIENTE = 'CLIENTE'
-
 function formatTime(segundos: number) {
   if (!Number.isFinite(segundos) || segundos < 0) segundos = 0
   const min = Math.floor(segundos / 60)
@@ -14,7 +11,7 @@ function formatTime(segundos: number) {
   return `${min}:${seg.toString().padStart(2, '0')}`
 }
 
-export default function EmpresasClient() {
+export default function EmpresasClient({ nome = 'CLIENTE' }: { nome?: string }) {
   const router = useRouter()
   const [mostrarPlayer, setMostrarPlayer] = useState(false)
   const [tocando, setTocando] = useState(false)
@@ -45,7 +42,7 @@ export default function EmpresasClient() {
         aria-label="Boas-vindas"
         className="w-full rounded-xl border border-gray-200 px-4 py-4 shadow-sm sm:px-6 sm:py-5"
       >
-        <h1 className="text-base font-bold text-gray-900 sm:text-lg">{NOME_CLIENTE}</h1>
+        <h1 className="text-base font-bold text-gray-900 sm:text-lg">{nome}</h1>
         <p className="mt-1 text-sm text-gray-600 sm:text-base">Seja bem vindo(a) a sua conta Gov.br</p>
       </section>
 
