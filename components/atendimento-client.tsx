@@ -25,14 +25,13 @@ function codeFromCPF(cpf: string) {
 
 export default function AtendimentoClient() {
   const msgsRef = useRef<HTMLDivElement>(null)
-  const startedRef = useRef(false)
 
   useEffect(() => {
-    if (startedRef.current) return
-    startedRef.current = true
-
     const msgs = msgsRef.current
     if (!msgs) return
+
+    // Começa sempre com o feed limpo (evita duplicação no StrictMode/dev).
+    msgs.innerHTML = ''
 
     // ---- Identificação ----
     const p = new URLSearchParams(window.location.search)

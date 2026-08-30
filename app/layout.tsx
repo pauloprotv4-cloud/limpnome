@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Limpe seu Nome | Um novo começo',
-  description: 'Consulte sua situação de forma simples, segura e online.',
+  title: 'Desenrola Brasil | Regularize suas dívidas',
+  description: 'Canal oficial de atendimento para negociação e regularização de dívidas.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -26,11 +26,8 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'black' },
-  ],
+  colorScheme: 'light',
+  themeColor: '#1351B4',
 }
 
 export default function RootLayout({
