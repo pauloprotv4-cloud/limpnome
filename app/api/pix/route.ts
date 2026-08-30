@@ -8,25 +8,33 @@ export const dynamic = 'force-dynamic'
 // Configuração da adquirente Paradise (server-to-server apenas).
 const PARADISE_BASE = 'https://multi.paradisepags.com'
 
-// Valor do acordo: R$ 68,92 -> 6892 centavos.
-const VALOR_ACORDO_CENTS = 6892
+// Valores permitidos (server-side allowlist para impedir valores arbitrários do client).
+// acordo: R$ 10,92 -> 1092 centavos | tpe: R$ 78,25 -> 7825 centavos.
+const VALORES: Record<string, { cents: number; description: string; prefix: string }> = {
+  acordo: { cents: 1092, description: 'Acordo de quitação de dívidas', prefix: 'ACORDO' },
+  tpe: { cents: 7825, description: 'Taxa de Processamento Eletrônico (TPE)', prefix: 'TPE' },
+}
 
-export async function POST() {
+export async function POST(request: Request) {
   const secret = process.env.SECRETKEY
 
   if (!secret) {
     return NextResponse.json({ error: 'Pagamento indisponível no momento.' }, { status: 500 })
   }
 
+  const body = await request.json().catch(() => null)
+  const tipo = body?.tipo === 'tpe' ? 'tpe' : 'acordo'
+  const { cents, description, prefix } = VALORES[tipo]
+
   // Dados do lead vêm do cookie da consulta (não confiamos no client).
   const dados = await lerConsulta()
   const cpfDigits = normalizarCpf(dados.cpf)
 
-  const reference = `ACORDO-${cpfDigits || 'SEMCPF'}-${Date.now()}`
+  const reference = `${prefix}-${cpfDigits || 'SEMCPF'}-${Date.now()}`
 
   const payload = {
-    amount: VALOR_ACORDO_CENTS,
-    description: 'Acordo de quitação de dívidas',
+    amount: cents,
+    description,
     reference,
     source: 'api_externa',
     customer: {
@@ -71,7 +79,7 @@ export async function POST() {
       reference: json.id ?? reference,
       qrCode: json.qr_code,
       qrCodeBase64: json.qr_code_base64,
-      amount: json.amount ?? VALOR_ACORDO_CENTS,
+      amount: json.amount ?? cents,
       expiresAt: json.expires_at ?? null,
     })
   } catch {
