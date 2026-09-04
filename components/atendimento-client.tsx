@@ -2,6 +2,7 @@
 
 import QRCode from 'qrcode'
 import { useEffect, useRef } from 'react'
+import { lerUtms, montarTracking } from '@/lib/tracking'
 
 function onlyDigits(s: string) {
   return String(s || '').replace(/\D/g, '')

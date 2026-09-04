@@ -1,7 +1,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { capturarUtms, lerUtms } from '@/lib/tracking'
 
 function onlyDigits(s: string) {
   return String(s || '').replace(/\D/g, '')
@@ -35,6 +36,11 @@ export default function ConsultaClient() {
   const [cpf, setCpf] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Captura as UTMs da URL de entrada e salva para uso ao gerar o PIX.
+  useEffect(() => {
+    capturarUtms()
+  }, [])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const raw = onlyDigits(cpf)
@@ -59,6 +65,11 @@ export default function ConsultaClient() {
         params.set('cpf', raw)
         params.set('nome', json.data.nome)
         if (json.data.nascimento) params.set('nasc', json.data.nascimento)
+        // Preserva as UTMs capturadas ao longo do funil.
+        const utms = lerUtms()
+        for (const [k, v] of Object.entries(utms)) {
+          if (v) params.set(k, v)
+        }
         router.push('/atendimento?' + params.toString())
         return
       }
